@@ -1,0 +1,193 @@
+import pygame
+from random import randint
+
+pygame.init()
+width, height = 640, 480
+display = pygame.display.set_mode((width, height))
+clock = pygame.time.Clock()
+robot = pygame.image.load("robot.png").convert_alpha()
+coin = pygame.image.load("coin.png").convert_alpha()
+monster = pygame.image.load("monster.png").convert_alpha()
+pygame.display.set_caption("Monster Mania")
+
+x = (width - robot.get_width()) / 2
+y = height - robot.get_height()
+
+monster_limit = 1
+player_speed = 6
+coins = pygame.sprite.Group()
+monsters = pygame.sprite.Group()
+points = 0
+pause_flag = False
+game_over_flag = False
+move_left = False
+move_right = False
+record_score = 0
+
+class Sprite(pygame.sprite.Sprite): # getting a mask for the ingame object for pixel perfect collision
+    def __init__(self, image, x, y, speed):
+        super().__init__()
+        self.image = image
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.mask = pygame.mask.from_surface(self.image)
+        self.speed = speed
+
+robot_sprite = Sprite(robot, x, y, 6)
+coin_sprite = Sprite(coin, randint(0, width - 20), 0, 2)
+monster_sprite = Sprite(monster, randint(0, width - 20), 0, 2)
+
+#All functions:
+def draw_screen(): # function to draw everything on screen
+    display.fill((176, 216, 230))
+    display.blit(robot, (x, y))
+    draw_points_and_chance_to_pause(points, record_score)
+    for coin_sprite in coins:
+        display.blit(coin_sprite.image, coin_sprite.rect.topleft)
+    for monster_sprite in monsters: # draw monsters
+        display.blit(monster_sprite.image, monster_sprite.rect.topleft)
+
+def generate_coins():
+    i = randint(0, 1000)
+    if i < 5:
+        coin_sprite = Sprite(coin, randint(0, width - 20), randint(-100, -40), speed=4)
+        if not pygame.sprite.spritecollideany(coin_sprite, coins):
+            coins.add(coin_sprite)
+
+def generate_monsters(monsters, monster_limit):
+    i = randint(0, 200)
+    if i < monster_limit:
+        monster_sprite = Sprite(monster, randint(0, width - 20), randint(-100, -40), speed=2)
+        if not pygame.sprite.spritecollideany(monster_sprite, monsters):
+            monsters.add(monster_sprite)
+
+def check_hitboxes(robot, objects):  # check collision between player and coin/monster
+    return pygame.sprite.spritecollide(robot, objects, False, pygame.sprite.collide_mask)
+
+def draw_points_and_chance_to_pause(points, record_score): # function to draw points on top right corner, option to pause the game on the top left corner
+    text = pygame.font.SysFont("Arial", 24, True)
+    smaller_text = pygame.font.SysFont("Arial", 18)
+    points_object = text.render(f'Points: {points}', True, (255, 0, 0))
+    highscore_object = text.render(f'Best result: {record_score}', True, (255, 0, 0))
+    pause_object = smaller_text.render(f'Press P to pause the game', True, (255, 0, 0))
+    display.blit(highscore_object, (width - highscore_object.get_width(), 20))
+    display.blit(points_object, (width - points_object.get_width(), 0))
+    display.blit(pause_object, (0, 0))
+
+def draw_paused():
+    text = pygame.font.SysFont("Arial", 32)
+    paused_text = text.render("Game paused, press P to continue", True, (255, 0, 0))
+    display.blit(paused_text, ((width - paused_text.get_width()) / 2, (height - paused_text.get_height()) / 2))
+
+def handle_pause():
+    global pause_flag
+    while pause_flag:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                exit()
+            
+            if event.type == pygame.KEYDOWN: #press p to stop pause, return to main loop
+                if event.key == pygame.K_p:
+                    pause_flag = False
+                    return
+                    
+        draw_screen()
+        draw_paused()
+        pygame.display.flip()
+
+def draw_game_over(): # function to draw game over and restart button
+    text = pygame.font.SysFont("Arial", 48)
+    smaller_text = pygame.font.SysFont("Arial", 32)
+    over_text = text.render("GAME OVER", True, (255, 0, 0))
+    restart_text = smaller_text.render("Press space key to restart the game", True, (255, 0, 0))
+    x_print = (width - over_text.get_width()) / 2
+    y_print = (height - over_text.get_height()) / 2
+    display.blit(over_text, (x_print, y_print))
+    display.blit(restart_text, ((width - restart_text.get_width()) / 2, y_print + over_text.get_height()))
+    return True
+
+def handle_game_over():
+    global game_over_flag
+    while game_over_flag:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    reset_game()
+                    return
+
+        draw_screen()
+        draw_game_over()
+        pygame.display.flip()
+
+def reset_game():
+    global x, y, coins, monsters, points, pause_flag, game_over_flag, move_left, move_right, monster_limit, player_speed
+    x = (width - robot.get_width()) / 2
+    y = height - robot.get_height()
+    monster_limit = 1
+    coins.empty()
+    monsters.empty()
+    points = 0
+    player_speed = 6
+    pause_flag = False
+    game_over_flag = False
+    move_left = False
+    move_right = False
+
+#MAIN LOOP:
+while True:
+    for event in pygame.event.get(): 
+        if event.type == pygame.QUIT:
+            exit()
+
+        if event.type == pygame.KEYDOWN: #player movement:
+            if event.key == pygame.K_LEFT:
+                move_left = True
+            if event.key == pygame.K_RIGHT:
+                move_right = True
+            if event.key == pygame.K_p:
+                pause_flag = True
+
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_LEFT:
+                move_left = False
+            if event.key == pygame.K_RIGHT:
+                move_right = False
+
+    if pause_flag: # pause game, keep the same drawings on the screen
+        handle_pause()
+        
+    if game_over_flag: #Game over
+        handle_game_over()
+
+    if move_left and x > 0:
+        x -= player_speed
+    if move_right and x < width - robot.get_width():
+        x += player_speed
+
+    robot_sprite.rect.topleft = (x, y)
+
+    generate_coins()
+    generate_monsters(monsters, monster_limit)
+        
+    for coin_sprite in coins: #coins falling
+        if coin_sprite.rect.y < height - coin.get_height():
+            coin_sprite.rect.y += 4
+        if check_hitboxes(robot_sprite, coins.sprites()):
+            coins.remove(pygame.sprite.spritecollideany(robot_sprite, coins))
+            points += 1
+            monster_limit += 1 # increase chance to create a monster
+            if points > record_score:
+                record_score = points
+
+    for monster_sprite in monsters:  # monsters falling
+        if monster_sprite.rect.y < 600:
+            monster_sprite.rect.y += 2
+        if check_hitboxes(robot_sprite, monsters.sprites()):
+            game_over_flag = True
+        if monster_sprite.rect.y > height:
+            monsters.remove(monster_sprite)
+
+    draw_screen()
+    pygame.display.flip()
+    clock.tick(120)
